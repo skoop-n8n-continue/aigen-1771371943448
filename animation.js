@@ -30,16 +30,18 @@ function createProductCard(product) {
   const badge = product.badge || "";
 
   el.innerHTML = `
-    ${badge ? `<div class="badge">${badge}</div>` : ""}
-    <div class="image-wrapper">
-      <img src="${imageSrc}" class="product-image">
-    </div>
-    <div class="product-info">
-      <div class="product-brand">${brandLine}</div>
-      <div class="product-name">${nameLine}</div>
-      <div class="price-container">
-        <div class="offer-qty">${offer}</div>
-        <div class="price">${price}</div>
+    <div class="product-content">
+      ${badge ? `<div class="badge">${badge}</div>` : ""}
+      <div class="image-wrapper">
+        <img src="${imageSrc}" class="product-image" onerror="this.style.display='none'">
+      </div>
+      <div class="product-info">
+        <div class="product-brand">${brandLine}</div>
+        <div class="product-name">${nameLine}</div>
+        <div class="price-container">
+          <div class="offer-qty">${offer}</div>
+          <div class="price">${price}</div>
+        </div>
       </div>
     </div>
   `;
@@ -51,8 +53,10 @@ function getNextBatch(startIndex) {
   if (!products.length) return [];
   const batch = [];
   for (let i = 0; i < CONFIG.maxProducts; i++) {
-    const p = products[(startIndex + i) % products.length];
-    batch.push(p);
+    if (products.length > 0) {
+        const p = products[(startIndex + i) % products.length];
+        batch.push(p);
+    }
   }
   return batch;
 }
@@ -73,9 +77,11 @@ function animateBatch(startIndex) {
     gsap.set(el, {
       x: SLOTS[i].x,
       y: 1200, // Start below screen
+      xPercent: -50, // Center horizontally
+      yPercent: -50, // Center vertically
       opacity: 0,
       scale: 0.8,
-      rotation: Math.random() * 4 - 2 // Slight random rotation
+      rotation: Math.random() * 4 - 2 
     });
   });
 
@@ -100,16 +106,18 @@ function animateBatch(startIndex) {
     ease: "power3.out"
   });
 
-  // 2. Idle (Floating) - using separate tweens for continuous effect
+  // 2. Start Bobbing (on inner content)
   elements.forEach((el) => {
-    // Bobbing
-    gsap.to(el, {
-      y: "-=15",
-      duration: 2 + Math.random(),
-      yoyo: true,
-      repeat: -1,
-      ease: "sine.inOut"
-    });
+    const content = el.querySelector(".product-content");
+    if(content) {
+        gsap.to(content, {
+          y: "-=15",
+          duration: 2 + Math.random(),
+          yoyo: true,
+          repeat: -1,
+          ease: "sine.inOut"
+        });
+    }
   });
 
   // 3. Hold
@@ -129,42 +137,66 @@ function animateBatch(startIndex) {
 async function init() {
   try {
     const res = await fetch("products.json");
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const data = await res.json();
-    products = data.products || [];
+    
+    // Robust data handling: support both {products: []} and []
+    if (Array.isArray(data)) {
+        products = data;
+    } else {
+        products = data.products || [];
+    }
 
     if (products.length > 0) {
       animateBatch(0);
       initBackgroundEffects();
+    } else {
+        console.warn("No products found in products.json");
+        const container = document.getElementById("products-container");
+        if(container) container.innerHTML = "<div style='color:white; font-size: 24px; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);'>No products available</div>";
     }
   } catch (err) {
     console.error("Init failed:", err);
+    const container = document.getElementById("products-container");
+    if(container) {
+        container.innerHTML = `<div style='color:red; background:rgba(0,0,0,0.8); padding:20px; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:1000;'>Error loading products: ${err.message}</div>`;
+    }
   }
 }
 
 function initBackgroundEffects() {
   // Simple particle drift
   const particles = document.querySelectorAll(".particle");
-  particles.forEach(p => {
-    gsap.to(p, {
-      y: "random(-50, 50)",
-      x: "random(-50, 50)",
-      duration: "random(5, 10)",
-      repeat: -1,
-      yoyo: true,
-      ease: "sine.inOut"
-    });
-  });
+  if(particles.length) {
+      particles.forEach(p => {
+        gsap.to(p, {
+          y: "random(-50, 50)",
+          x: "random(-50, 50)",
+          duration: "random(5, 10)",
+          repeat: -1,
+          yoyo: true,
+          ease: "sine.inOut"
+        });
+      });
+  }
   
   // Ripples
   const ripples = document.querySelectorAll(".ripple");
-  gsap.to(ripples, {
-    scale: 1.5,
-    opacity: 0,
-    duration: 4,
-    stagger: 2,
-    repeat: -1,
-    ease: "power1.out"
-  });
+  if(ripples.length) {
+      gsap.to(ripples, {
+        scale: 1.5,
+        opacity: 0,
+        duration: 4,
+        stagger: 2,
+        repeat: -1,
+        ease: "power1.out"
+      });
+  }
 }
 
-init();
+// Start when DOM is ready
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+} else {
+    init();
+}
